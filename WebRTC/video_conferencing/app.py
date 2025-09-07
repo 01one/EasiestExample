@@ -1,3 +1,4 @@
+# pip install Flask flask-socketio
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 
@@ -30,3 +31,4 @@ def on_ice_candidate(data):
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
+
