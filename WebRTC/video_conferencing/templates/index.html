@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <video id="localVideo" autoplay muted></video>
+    <video id="remoteVideo" autoplay></video>
+    <button id="connectButton">Connect</button>
+    <script>
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const connectButton = document.getElementById('connectButton');
+        let pc;
+        let isConnected = false; // Add a flag to track connection status
+
+        connectButton.addEventListener('click', () => {
+            if (!isConnected) {
+                // Code to establish the connection and set up communication
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                    .then(stream => {
+                        localVideo.srcObject = stream;
+                        pc = new RTCPeerConnection();
+
+                        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+                        pc.onicecandidate = event => {
+                            if (event.candidate) {
+                                socket.emit('ice_candidate', event.candidate);
+                            }
+                        };
+
+                        pc.ontrack = event => {
+                            remoteVideo.srcObject = event.streams[0];
+                        };
+
+                        socket.on('offer', offer => {
+                            pc.setRemoteDescription(new RTCSessionDescription(offer));
+                            pc.createAnswer()
+                                .then(answer => {
+                                    pc.setLocalDescription(answer);
+                                    socket.emit('answer', answer);
+                                });
+                        });
+
+                        socket.on('answer', answer => {
+                            pc.setRemoteDescription(new RTCSessionDescription(answer));
+                        });
+
+                        socket.on('ice_candidate', candidate => {
+                            pc.addIceCandidate(new RTCIceCandidate(candidate));
+                        });
+
+                        pc.createOffer()
+                            .then(offer => {
+                                pc.setLocalDescription(offer);
+                                socket.emit('offer', offer);
+                            });
+
+                        isConnected = true; // Connection established
+                        connectButton.disabled = true; // Disable the button after connection
+                    })
+                    .catch(error => {
+                        console.error('Error accessing media devices:', error);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
