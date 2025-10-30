@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch {{ media_name }}</title>
+    <script src="https://cdn.dashjs.org/v4.7.4/dash.all.min.js"></script>
+    <style>
+        #debug-log {
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-size: 0.9em;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>{{ media_name }}</h1>
+
+    <video id="videoPlayer" controls width="720" height="405"></video>
+
+    <div id="qualityControls">
+        <label for="qualitySelector">Quality:</label>
+        <select id="qualitySelector" style="display: none;"></select>
+    </div>
+
+    <pre id="debug-log"></pre>
+
+    <script>
+        var url = "/dash/{{ media_name }}/manifest.mpd";
+        var video = document.getElementById("videoPlayer");
+        var player = dashjs.MediaPlayer().create();
+        const logDiv = document.getElementById('debug-log');
+
+        function log(message) {
+            console.log(message);
+            logDiv.innerText += message + '\n';
+        }
+
+        log('DASH Player initializing...');
+
+        player.on(dashjs.MediaPlayer.events.ERROR, function(e) {
+            log('ERROR: ' + e.error.code + ' - ' + e.error.message);
+        });
+
+        player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function () {
+            log('EVENT: Stream initialized.');
+            
+            const bitrates = player.getBitrateInfoListFor('video');
+            log('Checking for available bitrates...');
+            if (!bitrates) {
+                log('DEBUG: player.getBitrateInfoListFor("video") returned null or undefined.');
+                return;
+            }
+            
+            log(`DEBUG: Found ${bitrates.length} video bitrate(s).`);
+            bitrates.forEach((bitrate, index) => {
+                log(`  [${index}] Height: ${bitrate.height}p, Bitrate: ${bitrate.bitrate} bps, Index: ${bitrate.qualityIndex}`);
+            });
+
+            const qualitySelector = document.getElementById('qualitySelector');
+            
+            if (bitrates.length > 1) {
+                log('SUCCESS: More than one quality level found. Building selector.');
+                qualitySelector.style.display = 'inline-block';
+                
+                qualitySelector.innerHTML = '';
+
+                const autoOption = document.createElement('option');
+                autoOption.value = -1;
+                autoOption.innerText = 'Auto (default)';
+                qualitySelector.appendChild(autoOption);
+
+                bitrates.forEach((bitrate, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.innerText = `${bitrate.height}p (${(bitrate.bitrate / 1000).toFixed(0)} kbps)`;
+                    qualitySelector.appendChild(option);
+                });
+
+                qualitySelector.addEventListener('change', function() {
+                    const selectedQualityIndex = parseInt(this.value);
+                    if (selectedQualityIndex === -1) {
+                        log('ACTION: Setting quality to AUTO.');
+                        player.updateSettings({ 'streaming': { 'abr': { 'autoSwitchBitrate': { 'video': true } } } });
+                    } else {
+                        log(`ACTION: Setting quality to index ${selectedQualityIndex}.`);
+                        player.updateSettings({ 'streaming': { 'abr': { 'autoSwitchBitrate': { 'video': false } } } });
+                        player.setQualityFor('video', selectedQualityIndex, true);
+                    }
+                });
+            } else {
+                log('INFO: Only one quality level was found. Quality selector will not be shown.');
+            }
+        });
+        
+        player.initialize(video, url, true);
+        log('Player initialized. Waiting for stream...');
+    </script>
+
+    <a href="/">Back to Library</a>
+</body>
+</html>

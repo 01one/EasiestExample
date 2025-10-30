@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Media Library</title>
+</head>
+<body>
+  <h1>Upload New Media</h1>
+  <form method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept="video/*,audio/*">
+    <input type="submit" value="Upload">
+  </form>
+
+  {% if message %}
+    <p style="color: green;">{{ message }}</p>
+  {% endif %}
+
+  <hr>
+
+  <h2>Available Media</h2>
+  <ul>
+    {% for media in media_list %}
+      <li>{{ media }} – <a href="/watch/{{ media }}">Watch</a></li>
+    {% else %}
+      <li>No media has been processed yet.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>
