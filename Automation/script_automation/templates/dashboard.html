@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Automation Studio</title>
+
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f0f0f0; }
+        ::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 0; }
+
+        .studio-card {
+            background-color: rgba(255, 255, 255, 0.24);
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 1rem;
+            font-weight: 500;
+            text-align: left;
+            color: #000;
+            background-color: #fff;
+            transition: background-color 0.2s;
+        }
+
+        .step-header:hover {
+            background-color: #f9f9f9;
+        }
+
+        .step-content {
+            padding: 2rem;
+            border-top: 1px solid #000;
+        }
+
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: white;
+            background-color: #999;
+            margin-right: 0.75rem;
+            transition: background-color 0.2s;
+        }
+
+        .step-header.active .step-indicator {
+            background-color: #000;
+        }
+
+        .step-header.active {
+            background-color: #f5f5f5;
+        }
+
+        .action-btn {
+            transition: all 0.2s;
+        }
+        .action-btn:hover {
+            opacity: 0.7;
+        }
+        .action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.3;
+        }
+
+        .input-field {
+            background-color: white;
+            border: 2px solid #999;
+            color: #000;
+            font-size: 0.875rem;
+
+            width: 100%;
+            padding: 0.625rem;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #000;
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn {
+            font-weight: 500;
+            font-size: 0.875rem;
+            padding: 0.625rem 1.25rem;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: #000;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #333;
+        }
+
+        .btn-secondary {
+            background-color: #fff;
+            color: #000;
+        }
+        .btn-secondary:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body class="bg-white text-black">
+
+    <div class="container max-w-screen-xl mx-auto p-4 sm:p-6">
+
+        <header class="flex justify-between items-center mb-6 bg-white p-4 ">
+            <h1 class="text-2xl font-bold text-black flex items-center gap-3">
+                <span>Run Script Automatically on Schedule</span>
+            </h1>
+            <a href="{{ url_for('logout') }}" class="btn btn-secondary">
+                <i class="fas fa-sign-out-alt fa-fw"></i>
+                Logout
+            </a>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-4 mb-4 text-sm flex items-center gap-3 bg-gray-50" role="alert">
+                        {% if category == 'success' %}
+                            <i class="fas fa-check-circle fa-fw"></i>
+                        {% elif category == 'info' %}
+                             <i class="fas fa-info-circle fa-fw"></i>
+                        {% else %}
+                             <i class="fas fa-exclamation-triangle fa-fw"></i>
+                        {% endif %}
+                        <span class="font-medium">{{ message }}</span>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <div class="lg:col-span-1 space-y-6">
+                <div class="studio-card">
+                    <div class="p-6">
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                            <i class="fas fa-file-code fa-fw"></i>
+                            Scripts Library
+                        </h2>
+                        <form action="{{ url_for('upload_script') }}" method="post" enctype="multipart/form-data" class="space-y-3 mb-6">
+                            <input type="file" name="file" class="input-field" accept=".py" required>
+                            <button type="submit" class="btn btn-primary w-full">
+                                <i class="fas fa-upload fa-fw"></i>
+                                Upload Script
+                            </button>
+                        </form>
+                        <div class="space-y-2">
+                            {% if scripts %}
+                                {% for script in scripts %}
+                                <div class="bg-gray-50 p-3 flex justify-between items-center text-sm border border-gray-200">
+                                    <span class="font-medium">{{ script.name }}</span>
+                                    <div class="flex items-center gap-4">
+                                        <a href="{{ url_for('run_now', script_name=script.name) }}" class="text-black hover:opacity-70" title="Run Now">
+                                            <i class="fas fa-play fa-fw"></i>
+                                        </a>
+                                        <a href="{{ url_for('view_log', script_name=script.name) }}" class="text-black hover:opacity-70" target="_blank" title="View Log">
+                                            <i class="fas fa-file-alt fa-fw"></i>
+                                        </a>
+                                        <a href="{{ url_for('delete_script', script_name=script.name) }}" class="text-black hover:opacity-70" onclick="return confirm('Delete script and its jobs?');" title="Delete">
+                                            <i class="fas fa-trash-alt fa-fw"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-center text-sm py-4 text-gray-500 bg-gray-50 border border-gray-200">Upload a script to begin.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="studio-card">
+                    <div class="p-6">
+                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                           <i class="fas fa-tasks fa-fw"></i>
+                            Active Jobs
+                        </h2>
+                        <div class="space-y-3">
+                            {% if jobs %}
+                                {% for job in jobs %}
+                                <div class="bg-gray-50 p-4 space-y-2 border border-gray-200">
+                                    <div class="flex justify-between items-center">
+                                        <p class="font-bold">{{ job.id }}</p>
+                                        <a href="{{ url_for('delete_job', job_id=job.id) }}" class="text-black hover:opacity-70" onclick="return confirm('Delete this job?');" title="Delete Job">
+                                            <i class="fas fa-trash-alt fa-fw"></i>
+                                        </a>
+                                    </div>
+                                    <p class="text-xs text-gray-600">
+                                        <strong>Next Run:</strong> {{ job.next_run_time.strftime('%Y-%m-%d %H:%M') if job.next_run_time else 'N/A' }}
+                                    </p>
+                                    <p class="text-xs text-gray-600">
+                                        <strong>Schedule:</strong>
+                                        <span class="font-mono bg-gray-200 px-2 py-0.5">{{ job.trigger }}</span>
+                                    </p>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-center text-sm py-4 text-gray-500 bg-gray-50 border border-gray-200">No jobs scheduled yet.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="studio-card">
+                    <div class="p-6 border-b border-black">
+                        <h2 class="text-2xl font-bold flex items-center gap-2">
+                            <i class="fas fa-plus fa-fw"></i>
+                            Create New Job
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        {% if not scripts %}
+                            <div class="p-4 bg-gray-50 border border-black flex items-center gap-3">
+                                <i class="fas fa-info-circle fa-fw"></i>
+                                <p class="text-sm font-medium">Please upload a script first.</p>
+                            </div>
+                        {% else %}
+                        <form action="{{ url_for('schedule_job') }}" method="post" id="scheduleForm" class="space-y-6" data-cron-validate-url="{{ url_for('validate_cron') }}">
+                            
+                            <div id="job-creation-accordion" class="space-y-[-1px]">
+                                <div class="border border-black overflow-hidden">
+                                    <button type="button" class="step-header" data-step="1">
+                                        <span class="flex items-center">
+                                            <span class="step-indicator">1</span>
+                                            <span class="flex items-center gap-2">
+                                                <i class="fas fa-tag fa-fw text-gray-600"></i>
+                                                Name Your Job
+                                            </span>
+                                        </span>
+                                        <i class="fas fa-chevron-down fa-fw shrink-0 transition-transform duration-200"></i>
+                                    </button>
+                                    <div class="step-content hidden">
+                                        <label class="block mb-2 text-sm font-medium">Job Name (must be unique)</label>
+                                        <input type="text" name="job_name" class="input-field" placeholder="e.g., daily-report-job" required>
+                                    </div>
+                                </div>
+
+                                <div class="border border-black overflow-hidden">
+                                    <button type="button" class="step-header" data-step="2">
+                                        <span class="flex items-center">
+                                            <span class="step-indicator">2</span>
+                                            <span class="flex items-center gap-2">
+                                                <i class="fas fa-code fa-fw text-gray-600"></i>
+                                                Choose Script
+                                            </span>
+                                        </span>
+                                        <i class="fas fa-chevron-down fa-fw shrink-0 transition-transform duration-200"></i>
+                                    </button>
+                                    <div class="step-content hidden">
+                                        <label class="block mb-2 text-sm font-medium">Primary Script</label>
+                                        <select name="script_name" class="input-field" required>
+                                            <option value="">-- Select Script --</option>
+                                            {% for script in scripts %}<option value="{{ script.name }}">{{ script.name }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="border border-black overflow-hidden">
+                                    <button type="button" class="step-header" data-step="3">
+                                        <span class="flex items-center">
+                                            <span class="step-indicator">3</span>
+                                            <span class="flex items-center gap-2">
+                                                <i class="fas fa-calendar-alt fa-fw text-gray-600"></i>
+                                                Set Schedule
+                                            </span>
+                                        </span>
+                                        <i class="fas fa-chevron-down fa-fw shrink-0 transition-transform duration-200"></i>
+                                    </button>
+                                    <div class="step-content hidden">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                            <div>
+                                                <label class="block mb-2 text-sm font-medium">Schedule Type</label>
+                                                <select name="schedule_option" id="schedule_option" class="input-field" required>
+                                                    <option value="" data-schedule-target="">-- Select Type --</option>
+                                                    <optgroup label="Simple Intervals">
+                                                        <option value="every_5_min" data-schedule-target="">Every 5 minutes</option>
+                                                        <option value="every_15_min" data-schedule-target="">Every 15 minutes</option>
+                                                        <option value="every_30_min" data-schedule-target="">Every 30 minutes</option>
+                                                        <option value="hourly" data-schedule-target="">Every hour</option>
+                                                    </optgroup>
+                                                    <optgroup label="Specific Times">
+                                                        <option value="daily_time" data-schedule-target="dailyTimeFields">Daily at time</option>
+                                                        <option value="weekly_day_time" data-schedule-target="weeklyDayTimeFields">Weekly on day/time</option>
+                                                        <option value="monthly_date_time" data-schedule-target="monthlyDateTimeFields">Monthly on date/time</option>
+                                                    </optgroup>
+                                                    <optgroup label="Advanced">
+                                                        <option value="custom" data-schedule-target="customCronFields">Custom Cron</option>
+                                                    </optgroup>
+                                                </select>
+                                            </div>
+                                            <div id="schedule-fields-container" class="space-y-4">
+                                                <div id="dailyTimeFields" class="hidden">
+                                                    <label class="block mb-2 text-sm font-medium">Time</label>
+                                                    <input type="time" name="daily_time" class="input-field" value="09:00">
+                                                </div>
+                                                <div id="weeklyDayTimeFields" class="hidden grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label class="block mb-2 text-sm font-medium">Day</label>
+                                                        <select name="weekly_day" class="input-field">
+                                                            <option value="1">Monday</option>
+                                                            <option value="2">Tuesday</option>
+                                                            <option value="3">Wednesday</option>
+                                                            <option value="4">Thursday</option>
+                                                            <option value="5">Friday</option>
+                                                            <option value="6">Saturday</option>
+                                                            <option value="0">Sunday</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block mb-2 text-sm font-medium">Time</label>
+                                                        <input type="time" name="weekly_time" class="input-field" value="09:00">
+                                                    </div>
+                                                </div>
+                                                <div id="monthlyDateTimeFields" class="hidden grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label class="block mb-2 text-sm font-medium">Date</label>
+                                                        <input type="number" name="monthly_date" class="input-field" min="1" max="31" value="1">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block mb-2 text-sm font-medium">Time</label>
+                                                        <input type="time" name="monthly_time" class="input-field" value="09:00">
+                                                    </div>
+                                                </div>
+                                                <div id="customCronFields" class="hidden space-y-3">
+                                                    <div id="cron-inputs-container" class="grid grid-cols-5 gap-2">
+                                                        <div>
+                                                            <input type="text" data-cron-part="minute" class="input-field text-center" value="*">
+                                                            <div class="text-xs text-center mt-1 text-gray-500">Min</div>
+                                                        </div>
+                                                        <div>
+                                                            <input type="text" data-cron-part="hour" class="input-field text-center" value="*">
+                                                            <div class="text-xs text-center mt-1 text-gray-500">Hour</div>
+                                                        </div>
+                                                        <div>
+                                                            <input type="text" data-cron-part="day" class="input-field text-center" value="*">
+                                                            <div class="text-xs text-center mt-1 text-gray-500">Day</div>
+                                                        </div>
+                                                        <div>
+                                                            <input type="text" data-cron-part="month" class="input-field text-center" value="*">
+                                                            <div class="text-xs text-center mt-1 text-gray-500">Month</div>
+                                                        </div>
+                                                        <div>
+                                                            <input type="text" data-cron-part="day_of_week" class="input-field text-center" value="*">
+                                                            <div class="text-xs text-center mt-1 text-gray-500">DoW</div>
+                                                        </div>
+                                                    </div>
+                                                    <div id="cronValidatorResult" class="p-3 text-sm font-medium text-center border"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="border border-black overflow-hidden">
+                                    <button type="button" class="step-header" data-step="4">
+                                        <span class="flex items-center">
+                                            <span class="step-indicator">4</span>
+                                            <span class="flex items-center gap-2">
+                                                <i class="fas fa-link fa-fw text-gray-600"></i>
+                                                Chain Scripts (Optional)
+                                            </span>
+                                        </span>
+                                        <i class="fas fa-chevron-down fa-fw shrink-0 transition-transform duration-200"></i>
+                                    </button>
+                                    <div class="step-content hidden">
+                                        <div class="grid grid-cols-3 gap-2 items-end mb-4">
+                                            <div class="col-span-2">
+                                                <label class="block mb-2 text-sm font-medium">Add Script to Chain</label>
+                                                <select id="chainScriptSelector" class="input-field">
+                                                    <option value="">-- Select --</option>
+                                                    {% for script in scripts %}<option value="{{ script.name }}">{{ script.name }}</option>{% endfor %}
+                                                </select>
+                                            </div>
+                                            <button type="button" id="add-to-chain-btn" class="btn btn-primary w-full">
+                                                <i class="fas fa-plus fa-fw"></i>
+                                                Add
+                                            </button>
+                                        </div>
+                                        <div id="chainPreview" class="min-h-[50px]"></div>
+                                        <div id="chainModeSelector" class="hidden mt-4">
+                                            <label class="block mb-2 text-sm font-medium">Chain Execution Mode</label>
+                                            <select name="chain_mode" class="input-field">
+                                                <option value="sequential">Sequential (one after another)</option>
+                                                <option value="parallel">Parallel (all at once)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-full py-4 text-base">
+                                Create Automation Job
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    class DashboardStudio {
+        constructor(formId) {
+            this.form = document.getElementById(formId);
+            if (!this.form) return;
+
+            this.chainedScripts = [];
+            this.debounceTimer = null;
+            this.activeStep = 1;
+
+            this.elements = {
+                accordion: this.form.querySelector('#job-creation-accordion'),
+                scheduleOption: this.form.querySelector('#schedule_option'),
+                scheduleFieldsContainer: this.form.querySelector('#schedule-fields-container'),
+                chainScriptSelector: this.form.querySelector('#chainScriptSelector'),
+                addToChainBtn: this.form.querySelector('#add-to-chain-btn'),
+                chainPreview: this.form.querySelector('#chainPreview'),
+                chainModeSelector: this.form.querySelector('#chainModeSelector'),
+                cronInputsContainer: this.form.querySelector('#cron-inputs-container'),
+                cronValidatorResult: this.form.querySelector('#cronValidatorResult'),
+            };
+            
+            this.cronValidateUrl = this.form.dataset.cronValidateUrl;
+
+            this.init();
+        }
+
+        init() {
+            this._bindEvents();
+            this._updateAccordion();
+            this._renderChainPreview();
+            this._toggleScheduleFields();
+        }
+
+        _bindEvents() {
+            this.elements.accordion.addEventListener('click', e => {
+                const header = e.target.closest('.step-header');
+                if (header) {
+                    this.activeStep = parseInt(header.dataset.step, 10);
+                    this._updateAccordion();
+                }
+            });
+            
+            this.elements.scheduleOption.addEventListener('change', this._toggleScheduleFields.bind(this));
+            this.elements.addToChainBtn.addEventListener('click', this._addToChain.bind(this));
+            this.elements.chainPreview.addEventListener('click', this._handleChainActions.bind(this));
+            this.form.addEventListener('submit', this._handleFormSubmit.bind(this));
+            
+            if (this.elements.cronInputsContainer) {
+                this.elements.cronInputsContainer.addEventListener('keyup', this._validateCustomCron.bind(this));
+            }
+        }
+
+        _updateAccordion() {
+            const headers = this.elements.accordion.querySelectorAll('.step-header');
+            headers.forEach(header => {
+                const step = parseInt(header.dataset.step, 10);
+                const content = header.nextElementSibling;
+                const icon = header.querySelector('.fa-chevron-down');
+
+                if (step === this.activeStep) {
+                    header.classList.add('active');
+                    content.classList.remove('hidden');
+                    icon.classList.add('rotate-180');
+                } else {
+                    header.classList.remove('active');
+                    content.classList.add('hidden');
+                    icon.classList.remove('rotate-180');
+                }
+            });
+        }
+        
+        _toggleScheduleFields() {
+            const selectedOption = this.elements.scheduleOption.selectedOptions[0];
+            const targetId = selectedOption.dataset.scheduleTarget;
+            
+            const allFields = this.elements.scheduleFieldsContainer.children;
+            Array.from(allFields).forEach(field => field.classList.add('hidden'));
+
+            if (targetId) {
+                const targetField = this.elements.scheduleFieldsContainer.querySelector(`#${targetId}`);
+                if (targetField) targetField.classList.remove('hidden');
+            }
+        }
+
+        _addToChain() {
+            const scriptName = this.elements.chainScriptSelector.value;
+            if (!scriptName || this.chainedScripts.includes(scriptName)) {
+                alert(scriptName ? 'This script is already in the chain.' : 'Please select a script.');
+                return;
+            }
+            this.chainedScripts.push(scriptName);
+            this.elements.chainScriptSelector.value = '';
+            this._renderChainPreview();
+        }
+
+        _handleChainActions(e) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const { action, index } = button.dataset;
+            const idx = parseInt(index, 10);
+
+            const actions = {
+                remove: () => this.chainedScripts.splice(idx, 1),
+                moveUp: () => {
+                    if (idx > 0) [this.chainedScripts[idx - 1], this.chainedScripts[idx]] = [this.chainedScripts[idx], this.chainedScripts[idx - 1]];
+                },
+                moveDown: () => {
+                    if (idx < this.chainedScripts.length - 1) [this.chainedScripts[idx + 1], this.chainedScripts[idx]] = [this.chainedScripts[idx], this.chainedScripts[idx + 1]];
+                }
+            };
+            
+            if (actions[action]) {
+                actions[action]();
+                this._renderChainPreview();
+            }
+        }
+        
+        _renderChainPreview() {
+            const { chainPreview, chainModeSelector } = this.elements;
+            chainPreview.innerHTML = '';
+            
+            if (this.chainedScripts.length === 0) {
+                chainPreview.innerHTML = '<p class="text-xs text-center text-gray-500 italic py-4">No chained scripts added.</p>';
+                chainModeSelector.classList.add('hidden');
+                return;
+            }
+
+            chainModeSelector.classList.remove('hidden');
+            const container = document.createElement('div');
+            container.className = 'space-y-2';
+
+            this.chainedScripts.forEach((script, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'flex items-center justify-between bg-gray-50 border border-gray-200 p-2.5';
+                
+                itemDiv.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 flex items-center justify-center w-7 h-7 mr-3 text-sm font-bold text-white bg-black">${index + 1}</div>
+                        <div class="font-medium text-black">${script}</div>
+                    </div>`;
+
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'flex items-center gap-1.5';
+                
+                const btnUp = this._createActionButton('▲', 'moveUp', index, 'text-black hover:opacity-70', index === 0);
+                const btnDown = this._createActionButton('▼', 'moveDown', index, 'text-black hover:opacity-70', index === this.chainedScripts.length - 1);
+                const btnRemove = this._createActionButton('×', 'remove', index, 'text-black hover:opacity-70 text-lg');
+
+                actionsDiv.append(btnUp, btnDown, btnRemove);
+                itemDiv.appendChild(actionsDiv);
+                container.appendChild(itemDiv);
+            });
+            
+            chainPreview.appendChild(container);
+        }
+
+        _createActionButton(text, action, index, classes, disabled = false) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = text;
+            button.dataset.action = action;
+            button.dataset.index = index;
+            button.className = `font-mono action-btn ${classes}`;
+            button.disabled = disabled;
+            return button;
+        }
+
+        _handleFormSubmit(event) {
+            this.form.querySelectorAll('input[name="chain_scripts"]').forEach(i => i.remove());
+            this.chainedScripts.forEach(script => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'chain_scripts';
+                input.value = script;
+                this.form.appendChild(input);
+            });
+        }
+
+        _validateCustomCron() {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = setTimeout(() => {
+                const cronParts = this.elements.cronInputsContainer.querySelectorAll('input[data-cron-part]');
+                const data = Array.from(cronParts).reduce((acc, input) => {
+                    acc[input.dataset.cronPart] = input.value;
+                    return acc;
+                }, {});
+
+                fetch(this.cronValidateUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                })
+                .then(res => res.json())
+                .then(result => {
+                    const { cronValidatorResult } = this.elements;
+                    const validClasses = 'bg-white border-black text-black';
+                    const invalidClasses = 'bg-gray-100 border-black text-black';
+                    
+                    cronValidatorResult.style.display = 'block';
+                    if (result.valid) {
+                        cronValidatorResult.className = `p-3 text-sm font-medium text-center ${validClasses}`;
+                        cronValidatorResult.textContent = `✅ Valid! ${result.next_run ? `Next run: ${result.next_run}` : ''}`;
+                    } else {
+                        cronValidatorResult.className = `p-3 text-sm font-medium text-center ${invalidClasses}`;
+                        cronValidatorResult.textContent = `❌ Invalid: ${result.error}`;
+                    }
+                }).catch(error => {
+                    console.error('Cron validation error:', error);
+                    this.elements.cronValidatorResult.style.display = 'block';
+                    this.elements.cronValidatorResult.className = `p-3 text-sm font-medium text-center bg-gray-100 border-black text-black`;
+                    this.elements.cronValidatorResult.textContent = 'Error validating cron.';
+                });
+            }, 350);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if(document.getElementById('scheduleForm')) {
+            new DashboardStudio('scheduleForm');
+        }
+    });
+    </script>
+</body>
+</html>
