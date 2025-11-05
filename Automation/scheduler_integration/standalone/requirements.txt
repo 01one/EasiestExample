@@ -1,2 +1,0 @@
-apscheduler==3.11.1
-SQLAlchemy==2.0.44
