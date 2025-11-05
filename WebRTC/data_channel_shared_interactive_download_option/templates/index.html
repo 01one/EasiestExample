@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive WebRTC Based File Sharing</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+
+<body class="bg-white text-black min-h-screen p-8">
+    <h1 class="text-4xl font-bold mb-8 border-b-2 border-black pb-4">Interactive File Sharing Space</h1>
+
+    <div id="senderStatus" class="hidden mb-8 p-4 border-2 border-black bg-white">
+        <div id="senderInfo" class="mb-2 font-mono">Sending: -</div>
+        <div class="w-full h-8 bg-gray-200 border border-black">
+            <div id="senderProgress" class="h-full bg-black transition-all duration-300" style="width: 0%;"></div>
+        </div>
+        <div id="senderProgressText" class="mt-2 font-bold">0%</div>
+    </div>
+
+    <div class="mb-8 p-6 bg-white">
+        <h3 class="text-2xl font-bold mb-4">Your Identity</h3>
+        <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="20" class="w-full max-w-md px-4 py-2 border-2 border-black mb-4">
+        <button id="joinButton" class="px-6 py-2 bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-colors">Join Sharing Space</button>
+        <div id="userStatus" class="mt-4 font-mono">Status: Not Connected</div>
+    </div>
+
+    <div class="fixed top-8 right-8 bg-white border-4 border-black p-6 shadow-2xl z-50 max-w-md hidden" id="requestNotification">
+        <div>
+            <h4 class="text-xl font-bold mb-3">File Request</h4>
+            <p id="requestMessage" class="mb-4"></p>
+            <div class="flex gap-4">
+                <button id="acceptRequest" class="flex-1 px-4 py-2 bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-colors">Accept</button>
+                <button id="denyRequest" class="flex-1 px-4 py-2 bg-white text-black border-2 border-black hover:bg-black hover:text-white transition-colors">Deny</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-8 p-6 bg-white hidden" id="myFilesSection">
+        <h3 class="text-2xl font-bold mb-4">Share Your Files</h3>
+        <input type="file" id="fileInput" multiple class="mb-4 block">
+        <div id="myFilesList" class="mb-4"></div>
+        <button id="shareFilesButton" class="px-6 py-2 bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-colors">Update Shared Files</button>
+    </div>
+
+    <div class="mb-8 p-6 bg-white hidden" id="availableFilesSection">
+        <h3 class="text-2xl font-bold mb-4">Available Files from Others</h3>
+        <div id="onlineUsers" class="mb-4 p-4 bg-gray-100 border border-black"></div>
+        <div id="availableFilesList"></div>
+    </div>
+
+    <div class="mb-8 p-6 border-2 border-black bg-white hidden" id="transferSection">
+        <h3 class="text-2xl font-bold mb-4">Transfer Progress</h3>
+        <div id="transferInfo" class="mb-4 font-mono"></div>
+        <div class="relative w-full max-w-lg h-8 bg-gray-200 border border-black mb-4">
+            <div id="transferProgress" class="h-full bg-black transition-all duration-300" style="width: 0%;"></div>
+            <div id="transferProgressText" class="absolute inset-0 flex items-center justify-center font-bold">0%</div>
+        </div>
+        <button id="cancelTransferButton" class="hidden px-6 py-2 bg-white text-black border-2 border-black hover:bg-black hover:text-white transition-colors">Cancel Transfer</button>
+    </div>
+
+    <div class="mb-8 p-6 border-2 border-black bg-white hidden" id="previewSection">
+        <h3 class="text-2xl font-bold mb-4">File Preview</h3>
+        <div id="previewContainer">
+            <video id="previewVideo" controls class="hidden max-w-full border-2 border-black mb-4"></video>
+            <img id="previewImage" class="hidden max-w-full border-2 border-black mb-4">
+            <div id="downloadContainer">
+                <button id="downloadButton" class="px-6 py-2 bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-colors">Download File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        let username = '';
+        let myFiles = [];
+        let availableFiles = {};
+        let connections = {};
+        let currentTransfer = null;
+        let currentAction = null;
+        let receivedChunks = [];
+        let receivedSize = 0;
+        let totalSize = 0;
+        let receivedFileMetadata = null;
+        let pendingRequest = null;
+        let downloadStream = null;
+        let downloadWriter = null;
+
+        const chunkSize = 128 * 1024;
+
+        const usernameInput = document.getElementById('usernameInput');
+        const joinButton = document.getElementById('joinButton');
+        const userStatus = document.getElementById('userStatus');
+        const fileInput = document.getElementById('fileInput');
+        const shareFilesButton = document.getElementById('shareFilesButton');
+        const myFilesList = document.getElementById('myFilesList');
+        const availableFilesList = document.getElementById('availableFilesList');
+        const onlineUsers = document.getElementById('onlineUsers');
+        const transferInfo = document.getElementById('transferInfo');
+        const transferProgress = document.getElementById('transferProgress');
+        const transferProgressText = document.getElementById('transferProgressText');
+        const cancelTransferButton = document.getElementById('cancelTransferButton');
+        const previewVideo = document.getElementById('previewVideo');
+        const previewImage = document.getElementById('previewImage');
+        const downloadButton = document.getElementById('downloadButton');
+        const requestNotification = document.getElementById('requestNotification');
+        const requestMessage = document.getElementById('requestMessage');
+        const acceptRequest = document.getElementById('acceptRequest');
+        const denyRequest = document.getElementById('denyRequest');
+
+        joinButton.addEventListener('click', joinSpace);
+        shareFilesButton.addEventListener('click', shareFiles);
+        fileInput.addEventListener('change', updateMyFilesList);
+        cancelTransferButton.addEventListener('click', cancelTransfer);
+        acceptRequest.addEventListener('click', handleAcceptRequest);
+        denyRequest.addEventListener('click', handleDenyRequest);
+
+        function joinSpace() {
+            username = usernameInput.value.trim();
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+
+            socket.emit('join_space', { username });
+            userStatus.textContent = `Status: Connecting as ${username}...`;
+        }
+
+        function updateMyFilesList() {
+            myFiles = Array.from(fileInput.files);
+            displayMyFiles();
+        }
+
+        function displayMyFiles() {
+            myFilesList.innerHTML = '';
+            myFiles.forEach((file, index) => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'flex justify-between items-center p-4 mb-2 border-2 border-black bg-white';
+                fileDiv.innerHTML = `
+                    <div>
+                        <div class="font-bold">${file.name}</div>
+                        <div class="text-sm text-gray-600">${formatFileSize(file.size)} • ${file.type || 'unknown'}</div>
+                    </div>
+                    <button class="px-4 py-2 bg-white text-black border-2 border-black hover:bg-black hover:text-white transition-colors" onclick="removeFile(${index})">Remove</button>
+                `;
+                myFilesList.appendChild(fileDiv);
+            });
+        }
+
+        function removeFile(index) {
+            myFiles.splice(index, 1);
+            displayMyFiles();
+            shareFiles();
+        }
+
+        function shareFiles() {
+            const fileList = myFiles.map((file, index) => ({
+                id: `${username}_${index}`,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                owner: username
+            }));
+
+            socket.emit('update_files', { files: fileList });
+        }
+
+        function requestFile(fileId, action) {
+            const [owner, fileIndex] = fileId.split('_');
+            currentAction = action;
+
+            socket.emit('request_file', {
+                fileId: fileId,
+                owner: owner,
+                fileIndex: parseInt(fileIndex),
+                action: action,
+                requester: username
+            });
+
+            if (action === 'download') {
+                showTransferProgress(`Requesting download of file from ${owner}...`);
+            } else {
+                showTransferProgress(`Requesting stream of file from ${owner}...`);
+            }
+        }
+
+        function showRequestNotification(data) {
+            const actionText = data.action === 'stream' ? 'stream' : 'download';
+            requestMessage.textContent = `${data.requester} wants to ${actionText} your file: ${myFiles[data.fileIndex].name}`;
+            requestNotification.classList.remove('hidden');
+            pendingRequest = data;
+
+            setTimeout(() => {
+                if (pendingRequest && pendingRequest.requestId === data.requestId) {
+                    handleDenyRequest();
+                }
+            }, 30000);
+        }
+
+        function hideRequestNotification() {
+            requestNotification.classList.add('hidden');
+            pendingRequest = null;
+        }
+
+        function handleAcceptRequest() {
+            if (!pendingRequest) return;
+
+            socket.emit('file_request_response', {
+                requestId: pendingRequest.requestId,
+                accepted: true,
+                requester: pendingRequest.requester
+            });
+
+            startFileSending(pendingRequest.fileIndex, pendingRequest.requester, pendingRequest.requestId, pendingRequest.action);
+            hideRequestNotification();
+        }
+
+        function handleDenyRequest() {
+            if (!pendingRequest) return;
+
+            socket.emit('file_request_response', {
+                requestId: pendingRequest.requestId,
+                accepted: false,
+                requester: pendingRequest.requester
+            });
+
+            hideRequestNotification();
+        }
+
+        function showTransferProgress(message) {
+            document.getElementById('transferSection').classList.remove('hidden');
+            transferInfo.textContent = message;
+            transferProgress.style.width = '0%';
+            transferProgressText.textContent = '0%';
+            cancelTransferButton.classList.remove('hidden');
+        }
+
+        function hideTransferProgress() {
+            document.getElementById('transferSection').classList.add('hidden');
+            cancelTransferButton.classList.add('hidden');
+        }
+
+        function cancelTransfer() {
+            if (currentTransfer) {
+                socket.emit('cancel_transfer', currentTransfer);
+                currentTransfer = null;
+            }
+            currentAction = null;
+            hideTransferProgress();
+            receivedChunks = [];
+            receivedSize = 0;
+
+            Object.keys(connections).forEach(transferId => {
+                if (connections[transferId] && connections[transferId].pc) {
+                    connections[transferId].pc.close();
+                    delete connections[transferId];
+                }
+            });
+
+            if (downloadWriter) {
+                downloadWriter.close();
+                downloadWriter = null;
+            }
+            if (downloadStream) {
+                downloadStream.abort();
+                downloadStream = null;
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]);
+        }
+
+        socket.on('joined_space', (data) => {
+            userStatus.textContent = `Status: Connected as ${data.username}`;
+            document.getElementById('myFilesSection').classList.remove('hidden');
+            document.getElementById('availableFilesSection').classList.remove('hidden');
+            availableFiles = data.availableFiles;
+            displayAvailableFiles();
+            displayOnlineUsers(data.onlineUsers);
+        });
+
+        socket.on('files_updated', (data) => {
+            availableFiles = data.availableFiles;
+            displayAvailableFiles();
+        });
+
+        socket.on('users_updated', (data) => {
+            displayOnlineUsers(data.onlineUsers);
+        });
+
+        socket.on('file_request', (data) => {
+            showRequestNotification(data);
+        });
+
+        socket.on('file_request_response', (data) => {
+            if (data.accepted) {
+                transferInfo.textContent = 'Request accepted! Establishing connection...';
+                currentTransfer = data.requestId;
+                setupConnection(data.requestId, false);
+            } else {
+                transferInfo.textContent = 'Request denied by file owner.';
+                currentAction = null;
+                setTimeout(hideTransferProgress, 3000);
+            }
+        });
+
+        socket.on('offer', (data) => {
+            if (data.transferId === currentTransfer) {
+                handleOffer(data.offer, data.transferId);
+            }
+        });
+
+        socket.on('answer', (data) => {
+            if (connections[data.transferId]) {
+                connections[data.transferId].pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+                    .catch(error => {
+                        console.error('Error setting remote description:', error);
+                    });
+            }
+        });
+
+        socket.on('ice_candidate', (data) => {
+            if (connections[data.transferId] && connections[data.transferId].pc) {
+                connections[data.transferId].pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+                    .catch(error => {
+                        console.error('Error adding ICE candidate:', error);
+                    });
+            }
+        });
+
+        socket.on('transfer_cancelled', (data) => {
+            if (data.transferId === currentTransfer) {
+                transferInfo.textContent = 'Transfer was cancelled.';
+                currentTransfer = null;
+                currentAction = null;
+                setTimeout(hideTransferProgress, 3000);
+
+                if (connections[data.transferId]) {
+                    connections[data.transferId].pc.close();
+                    delete connections[data.transferId];
+                }
+            }
+        });
+
+        function displayOnlineUsers(users) {
+            onlineUsers.innerHTML = '<span class="font-bold">Online Users:</span> ' +
+                users.map(user => `<span class="font-mono">${user}</span>`).join(', ');
+        }
+
+        function displayAvailableFiles() {
+            availableFilesList.innerHTML = '';
+
+            Object.keys(availableFiles).forEach(owner => {
+                if (owner === username) return;
+
+                const userDiv = document.createElement('div');
+                userDiv.className = 'mb-6';
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'font-bold text-lg mb-3 p-3 bg-gray-100 border-2 border-black';
+                headerDiv.textContent = `Files from ${owner}`;
+                userDiv.appendChild(headerDiv);
+
+                availableFiles[owner].forEach(file => {
+                    const fileDiv = document.createElement('div');
+                    fileDiv.className = 'flex justify-between items-center p-4 mb-2 border-2 border-black bg-white';
+
+                    const isStreamable = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/');
+
+                    fileDiv.innerHTML = `
+                        <div>
+                            <div class="font-bold">${file.name}</div>
+                            <div class="text-sm text-gray-600">${formatFileSize(file.size)} • ${file.type || 'unknown'}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="px-4 py-2 bg-black text-white border-2 border-black hover:bg-white hover:text-black transition-colors" onclick="requestFile('${file.id}', 'download')">Download</button>
+                            ${isStreamable ?
+                            `<button class="px-4 py-2 bg-white text-black border-2 border-black hover:bg-black hover:text-white transition-colors" onclick="requestFile('${file.id}', 'stream')">Stream</button>` : ''}
+                        </div>
+                    `;
+                    userDiv.appendChild(fileDiv);
+                });
+
+                availableFilesList.appendChild(userDiv);
+            });
+        }
+
+        function setupConnection(transferId, isInitiator) {
+            const pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+
+            connections[transferId] = { pc, dataChannel: null };
+
+            if (isInitiator) {
+                const dataChannel = pc.createDataChannel('fileTransfer', {
+                    ordered: false,
+                    maxRetransmits: 3
+                });
+                connections[transferId].dataChannel = dataChannel;
+                setupDataChannel(dataChannel, transferId);
+            } else {
+                pc.ondatachannel = (event) => {
+                    connections[transferId].dataChannel = event.channel;
+                    setupDataChannel(event.channel, transferId);
+                };
+            }
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', {
+                        candidate: event.candidate,
+                        transferId
+                    });
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                console.log('Connection state:', pc.connectionState);
+                if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                    transferInfo.textContent = 'Connection failed. Please try again.';
+                }
+            };
+
+            if (isInitiator) {
+                pc.createOffer()
+                    .then(offer => pc.setLocalDescription(offer))
+                    .then(() => {
+                        socket.emit('offer', {
+                            offer: pc.localDescription,
+                            transferId
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error creating offer:', error);
+                        transferInfo.textContent = 'Failed to create connection offer.';
+                    });
+            }
+        }
+
+        function handleOffer(offer, transferId) {
+            setupConnection(transferId, false);
+            const pc = connections[transferId].pc;
+
+            pc.setRemoteDescription(new RTCSessionDescription(offer))
+                .then(() => pc.createAnswer())
+                .then(answer => pc.setLocalDescription(answer))
+                .then(() => {
+                    socket.emit('answer', {
+                        answer: pc.localDescription,
+                        transferId
+                    });
+                })
+                .catch(error => {
+                    console.error('Error handling offer:', error);
+                    transferInfo.textContent = 'Failed to establish connection.';
+                });
+        }
+
+        function setupDataChannel(dataChannel, transferId) {
+            dataChannel.onopen = () => {
+                console.log('Data channel opened for transfer:', transferId);
+                transferInfo.textContent = 'Connection established! Starting transfer...';
+            };
+
+            dataChannel.onmessage = (event) => {
+                handleReceivedData(event.data, transferId);
+            };
+
+            dataChannel.onerror = (error) => {
+                console.error('Data channel error:', error);
+                transferInfo.textContent = 'Transfer error occurred.';
+            };
+
+            dataChannel.onclose = () => {
+                console.log('Data channel closed for transfer:', transferId);
+            };
+        }
+
+        function startFileSending(fileIndex, requester, transferId, action) {
+            setupConnection(transferId, true);
+
+            const connection = connections[transferId];
+            const file = myFiles[fileIndex];
+
+            const waitForConnection = () => {
+                if (connection.dataChannel && connection.dataChannel.readyState === 'open') {
+                    sendFile(file, connection.dataChannel, action);
+                } else {
+                    setTimeout(waitForConnection, 100);
+                }
+            };
+
+            waitForConnection();
+        }
+
+        const MAX_BUFFERED_AMOUNT = 16 * 1024 * 1024;
+
+        function sendFile(file, dataChannel, action) {
+            const metadata = {
+                type: 'metadata',
+                name: file.name,
+                size: file.size,
+                fileType: file.type,
+                action: action
+            };
+            dataChannel.send(JSON.stringify(metadata));
+
+            const senderStatus = document.getElementById('senderStatus');
+            const senderInfo = document.getElementById('senderInfo');
+            const senderProgress = document.getElementById('senderProgress');
+            const senderProgressText = document.getElementById('senderProgressText');
+            senderStatus.classList.remove('hidden');
+
+            const reader = new FileReader();
+            let offset = 0;
+            let sentSize = 0;
+            const totalSize = file.size;
+            const startTime = performance.now();
+
+            const sendNextChunk = () => {
+                if (offset >= totalSize) {
+                    dataChannel.send(JSON.stringify({ type: 'end', action: action }));
+                    console.log('File sending completed');
+
+                    setTimeout(() => {
+                        senderStatus.classList.add('hidden');
+                        senderProgress.style.width = '0%';
+                        senderProgressText.textContent = '0%';
+                        senderInfo.textContent = 'Sending: -';
+                    }, 1500);
+                    return;
+                }
+
+                if (dataChannel.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+                    dataChannel.onbufferedamountlow = () => {
+                        dataChannel.onbufferedamountlow = null;
+                        sendNextChunk();
+                    };
+                    return;
+                }
+
+                if (dataChannel.readyState === 'open') {
+                    const slice = file.slice(offset, offset + chunkSize);
+                    reader.readAsArrayBuffer(slice);
+                }
+            };
+
+            reader.onload = (event) => {
+                try {
+                    dataChannel.send(event.target.result);
+                    const chunkLength = event.target.result.byteLength;
+                    offset += chunkLength;
+                    sentSize += chunkLength;
+
+                    const now = performance.now();
+                    const elapsedSeconds = (now - startTime) / 1000;
+                    const speed = sentSize / elapsedSeconds;
+                    const progress = totalSize > 0 ? (sentSize / totalSize) * 100 : 0;
+
+                    senderProgress.style.width = `${progress}%`;
+                    senderProgressText.textContent = `${Math.round(progress)}%`;
+                    senderInfo.textContent = `Sending: ${file.name} (${formatBytes(sentSize)} of ${formatBytes(totalSize)}) @ ${formatSpeed(speed)}`;
+
+                    setTimeout(sendNextChunk, 10);
+                } catch (err) {
+                    console.error('Error sending chunk:', err);
+                }
+            };
+
+            reader.onerror = (error) => {
+                console.error('FileReader error:', error);
+            };
+
+            sendNextChunk();
+        }
+
+        let startTime = null; 
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            else if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+            else return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function formatSpeed(bytesPerSecond) {
+            if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(2)} B/s`;
+            else if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(2)} KB/s`;
+            else return `${(bytesPerSecond / (1024 * 1024)).toFixed(2)} MB/s`;
+        }
+
+        async function handleReceivedData(data, transferId) {
+            if (typeof data === 'string') {
+                try {
+                    const message = JSON.parse(data);
+                    if (message.type === 'metadata') {
+                        totalSize = message.size;
+                        receivedSize = 0;
+                        receivedChunks = [];
+                        receivedFileMetadata = message;
+                        startTime = performance.now();
+                        currentAction = message.action;
+                        transferInfo.textContent = `Receiving: ${message.name} (${formatBytes(message.size)})`;
+                        
+                        if (currentAction === 'download') {
+                            try {
+                                const fileHandle = await window.showSaveFilePicker({
+                                    suggestedName: message.name,
+                                    types: [{
+                                        description: 'Downloaded File',
+                                        accept: { [message.fileType]: [message.fileType.split('/')[1]] }
+                                    }]
+                                });
+                                
+                                downloadStream = await fileHandle.createWritable();
+                                downloadWriter = downloadStream.getWriter();
+                            } catch (error) {
+                                console.error('Error creating file handle:', error);
+                                if (error.name === 'TypeError') {
+                                }
+                            }
+                        }
+                        return;
+                    } else if (message.type === 'end') {
+                        await completeTransfer(receivedFileMetadata, transferId);
+                        return;
+                    }
+                } catch (e) {
+                }
+            }
+
+            const chunk = new Uint8Array(data);
+            receivedSize += chunk.byteLength;
+
+            const now = performance.now();
+            const elapsedSeconds = (now - startTime) / 1000;
+            const speed = receivedSize / elapsedSeconds;
+
+            const progress = totalSize > 0 ? (receivedSize / totalSize) * 100 : 0;
+            transferProgress.style.width = `${progress}%`;
+            transferProgressText.textContent = `${Math.round(progress)}%`;
+
+            transferInfo.textContent = `Receiving: ${receivedFileMetadata.name} (${formatBytes(receivedSize)} of ${formatBytes(totalSize)}) @ ${formatSpeed(speed)}`;
+
+            if (currentAction === 'download') {
+                if (downloadWriter) {
+                    try {
+                        await downloadWriter.write(chunk);
+                    } catch (error) {
+                        console.error('Error writing chunk:', error);
+                        downloadWriter = null;
+                    }
+                } else {
+                    receivedChunks.push(chunk);
+                }
+            } else {
+                receivedChunks.push(chunk);
+            }
+        }
+
+        async function completeTransfer(metadata, transferId) {
+            if (downloadWriter) {
+                await downloadWriter.close();
+                downloadWriter = null;
+                downloadStream = null;
+                
+                transferInfo.textContent = 'Download complete! File saved to disk.';
+                hideTransferProgress();
+            } else {
+                const blob = new Blob(receivedChunks, { type: metadata.fileType });
+
+                transferInfo.textContent = 'Transfer complete!';
+                hideTransferProgress();
+
+                if (currentAction === 'stream') {
+                    handleStreamPreview(blob, metadata);
+                } else {
+                    handleDownloadPreview(blob, metadata);
+                }
+            }
+
+            if (connections[transferId]) {
+                connections[transferId].pc.close();
+                delete connections[transferId];
+            }
+            currentTransfer = null;
+
+            socket.emit('transfer_complete', { transferId });
+        }
+
+        function handleStreamPreview(blob, metadata) {
+            document.getElementById('previewSection').classList.remove('hidden');
+
+            const objectURL = URL.createObjectURL(blob);
+
+            if (metadata.fileType.startsWith('video/')) {
+                previewVideo.classList.remove('hidden');
+                previewImage.classList.add('hidden');
+                previewVideo.src = objectURL;
+                previewVideo.autoplay = true;
+                previewVideo.controls = true;
+
+                previewVideo.onended = () => URL.revokeObjectURL(objectURL);
+
+            } else if (metadata.fileType.startsWith('audio/')) {
+                previewVideo.classList.remove('hidden');
+                previewImage.classList.add('hidden');
+                previewVideo.src = objectURL;
+                previewVideo.autoplay = true;
+                previewVideo.controls = true;
+
+                previewVideo.onended = () => URL.revokeObjectURL(objectURL);
+
+            } else if (metadata.fileType.startsWith('image/')) {
+                previewImage.classList.remove('hidden');
+                previewVideo.classList.add('hidden');
+                previewImage.src = objectURL;
+
+                downloadButton.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = objectURL;
+                    a.download = metadata.name || 'streamed_file';
+                    a.click();
+                };
+
+            } else {
+                previewVideo.classList.add('hidden');
+                previewImage.classList.add('hidden');
+
+                downloadButton.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = objectURL;
+                    a.download = metadata.name || 'streamed_file';
+                    a.click();
+                    URL.revokeObjectURL(objectURL);
+                };
+            }
+
+            downloadButton.textContent = 'Download Copy';
+            downloadButton.onclick = () => {
+                const a = document.createElement('a');
+                a.href = objectURL;
+                a.download = metadata.name || 'streamed_file';
+                a.click();
+            };
+        }
+
+        function handleDownloadPreview(blob, metadata) {
+            const objectURL = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = objectURL;
+            a.download = metadata.name || 'downloaded_file';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            document.getElementById('previewSection').classList.remove('hidden');
+
+            if (metadata.fileType.startsWith('video/')) {
+                previewVideo.classList.remove('hidden');
+                previewImage.classList.add('hidden');
+                previewVideo.src = objectURL;
+                previewVideo.controls = true;
+            } else if (metadata.fileType.startsWith('image/')) {
+                previewImage.classList.remove('hidden');
+                previewVideo.classList.add('hidden');
+                previewImage.src = objectURL;
+            } else {
+                previewVideo.classList.add('hidden');
+                previewImage.classList.add('hidden');
+            }
+
+            downloadButton.textContent = 'Download Again';
+            downloadButton.onclick = () => {
+                const a = document.createElement('a');
+                a.href = objectURL;
+                a.download = metadata.name || 'downloaded_file';
+                a.click();
+                URL.revokeObjectURL(objectURL);
+            };
+        }
+    </script>
+</body>
+</html>
