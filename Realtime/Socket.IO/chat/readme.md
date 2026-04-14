@@ -1,0 +1,4 @@
+
+```
+pip install flask flask-socketio
+```
