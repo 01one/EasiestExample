@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<head>
+<meta charset="UTF-8">
+<title>Multiple Tab Prevention</title>
+<script>
+const tablockchannel = new BroadcastChannel('tab-lock-tablockchannel');
+const tabId = Date.now();
+let isOriginalTab = false;
+
+window.onload = function() {
+    tablockchannel.postMessage({ type: 'ping', tabId });
+    setTimeout(() => {
+        if (!isOriginalTab) {
+            isOriginalTab = true;
+        }
+    }, 100);
+};
+
+tablockchannel.onmessage = function(event) {
+    const message = event.data;
+
+    switch (message.type) {
+        case 'ping':
+            if (isOriginalTab) {
+                tablockchannel.postMessage({ type: 'pong', tabId });
+            }
+            break;
+        case 'pong':
+            if (message.tabId !== tabId) {
+                alert('This site is already open in another tab! Closing this tab.');
+                window.close();
+                window.location.href = 'https://www.google.com/';
+            }
+            break;
+    }
+};
+
+
+
+</script>
+</head>
+<body>
+<p>This Simple feature prevents duplicate tabs</p>
+<p>Open this page also in another tab to test the feature</p>
+</body>
+</html>
