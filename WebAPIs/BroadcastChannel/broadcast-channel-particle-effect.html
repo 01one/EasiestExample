@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<head>
+<meta charset="UTF-8">
+<title>BroadcastChannel</title>
+
+
+
+
+<style>
+    body {
+        margin: 0;
+        background: #050510;
+        color: #fff;
+        overflow: hidden;
+        user-select: none;
+    }
+    canvas {
+        display: block;
+    }
+    #ui {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 15px;
+        border: 1px solid rgb(0, 0, 0);
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(255, 0, 255, 0.4);
+        text-shadow: 0 0 5px #fff;
+    }
+    h2 { margin: 0 0 5px 0; font-size: 16px; color: rgb(255, 255, 255); }
+    p { margin: 0; font-size: 12px; color: #aaa; }
+</style>
+
+
+
+</head>
+
+
+
+
+
+
+
+
+
+<body>
+
+<div id="ui">
+    <h2>tab: <span id="id"></span></h2>
+</div>
+
+<canvas id="canvas"></canvas>
+
+
+
+
+
+
+
+
+
+
+<script>
+const channel = new BroadcastChannel("tab-portal");
+
+
+
+
+const myId = crypto.randomUUID();
+document.getElementById("id").innerText = myId;
+
+
+
+
+
+
+
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+
+
+
+// Position on monitor//////////////////////////////////////////////////////////////
+const getScreenX = () => window.screenX + (window.outerWidth - window.innerWidth) / 2;
+const getScreenY = () => window.screenY + (window.outerHeight - window.innerHeight);
+/////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+let winX = getScreenX();
+let winY = getScreenY();
+let winW = window.innerWidth;
+let winH = window.innerHeight;
+
+
+
+
+
+
+
+
+
+
+
+
+
+let particles = [];
+let otherTabs = new Map();
+
+window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    winW = window.innerWidth;
+    winH = window.innerHeight;
+});
+window.dispatchEvent(new Event("resize"));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//broadcastchannel///////////////////////////////////////////////////////
+channel.onmessage = (e) => {
+    const msg = e.data;
+    
+    if (msg.type === "SPAWN") {
+        particles.push(...msg.particles);
+    } 
+    
+
+
+
+    if (msg.type === "HEARTBEAT") {
+        otherTabs.set(msg.id, {
+            cx: msg.cx,
+            cy: msg.cy,
+            lastSeen: Date.now()
+        });
+    }
+
+
+
+
+    if (msg.type === "TAB_MOVE") {
+        const rect = msg.rect;
+        particles.forEach(p => {
+            if (p.gx > rect.x && p.gx < rect.x + rect.w && p.gy > rect.y && p.gy < rect.y + rect.h) {
+                p.vx -= msg.dx * 0.15; 
+                p.vy -= msg.dy * 0.15;
+            }
+        });
+    }
+};
+
+
+window.addEventListener("mousedown", (e) => {
+    const globalX = winX + e.clientX;
+    const globalY = winY + e.clientY;
+    const baseHue = Math.random() * 360;
+    
+
+
+
+
+    const newParticles = [];
+    for (let i = 0; i < 150; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 10 + 2;
+        newParticles.push({
+            gx: globalX,
+            gy: globalY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            hue: baseHue + (Math.random() * 60 - 30),
+            life: 1.0,
+            decay: Math.random() * 0.003 + 0.001,
+            size: Math.random() * 3 + 1
+        });
+    }
+
+
+
+
+
+
+
+    particles.push(...newParticles);
+    channel.postMessage({ type: "SPAWN", particles: newParticles });
+});
+
+
+
+
+
+
+
+
+
+
+function animate() {
+    const currentWinX = getScreenX();
+    const currentWinY = getScreenY();
+    const dx = currentWinX - winX;
+    const dy = currentWinY - winY;
+    
+    if (dx !== 0 || dy !== 0) {
+        channel.postMessage({
+            type: "TAB_MOVE",
+            rect: { x: winX, y: winY, w: winW, h: winH },
+            dx: dx, dy: dy
+        });
+        
+        particles.forEach(p => {
+            if (p.gx > winX && p.gx < winX + winW && p.gy > winY && p.gy < winY + winH) {
+                p.vx -= dx * 0.15;
+                p.vy -= dy * 0.15;
+            }
+        });
+    }
+    
+    winX = currentWinX;
+    winY = currentWinY;
+
+
+
+    if (Math.random() < 0.1) {
+        channel.postMessage({
+            type: "HEARTBEAT",
+            id: myId,
+            cx: winX + winW / 2,
+            cy: winY + winH / 2
+        });
+    }
+
+
+
+
+
+
+
+
+
+
+    ctx.fillStyle = "rgba(5, 5, 16, 0.2)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.lineWidth = 1;
+
+    ctx.translate(-(winX % 100), -(winY % 100));
+    ctx.beginPath();
+    for(let x = -100; x < winW + 100; x+=100) { ctx.moveTo(x, -100); ctx.lineTo(x, winH + 100); }
+    for(let y = -100; y < winH + 100; y+=100) { ctx.moveTo(-100, y); ctx.lineTo(winW + 100, y); }
+    ctx.stroke();
+    ctx.restore();
+
+
+
+
+
+
+
+
+
+
+    const now = Date.now();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "#f0f";
+    
+    otherTabs.forEach((tab, id) => {
+        if (now - tab.lastSeen > 1000) {
+            otherTabs.delete(id);
+            return;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(winW / 2, winH / 2);
+        ctx.lineTo(tab.cx - winX, tab.cy - winY);
+        ctx.stroke();
+    });
+    ctx.shadowBlur = 0;
+
+    ctx.globalCompositeOperation = "lighter";
+    
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        
+        p.gx += p.vx;
+        p.gy += p.vy;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        p.life -= p.decay;
+
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+
+        const localX = p.gx - winX;
+        const localY = p.gy - winY;
+
+        if (localX > -10 && localX < winW + 10 && localY > -10 && localY < winH + 10) {
+            ctx.beginPath();
+            ctx.arc(localX, localY, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${p.hue}, 100%, 60%, ${p.life})`;
+            ctx.fill();
+        }
+    }
+
+    ctx.globalCompositeOperation = "source-over";
+    requestAnimationFrame(animate);
+}
+
+animate();
+
+
+</script>
+
+</body>
+
+
+
+</html>
