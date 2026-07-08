@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Active Users Chart</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    #activeUsersChart {
+      max-width: 90%;
+      margin: 20px auto;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+
+  <script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function () {
+      var ctx = document.getElementById('activeUsersChart').getContext('2d');
+      var activeUsersChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'Active Users',
+            data: [],
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          },
+          animation: {
+            duration: 0
+          },
+          hover: {
+            animationDuration: 0
+          },
+          responsiveAnimationDuration: 0
+        }
+      });
+
+      var eventSource = new EventSource('/stats');
+      eventSource.onmessage = function (event) {
+
+        var data = event.data.split(',');
+        console.log(data);
+        var currentTime = data[0];
+        var users = parseInt(data[1]);
+
+        activeUsersChart.data.labels.push(currentTime);
+        activeUsersChart.data.datasets[0].data.push(users);
+        if (activeUsersChart.data.labels.length > 30) {
+          activeUsersChart.data.labels.shift();
+          activeUsersChart.data.datasets[0].data.shift();
+        }
+        activeUsersChart.update();
+      };
+    });
+  </script>
+</head>
+
+<body>
+  <h1>Active Users Chart</h1>
+  <canvas id="activeUsersChart" width="800" height="400"></canvas>
+</body>
+
+</html>
