@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<title>ClashZone</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root{--c0:#ff6b57;--c1:#35d6e8;--ink:#fff5ec;--panel:rgba(32,20,60,.75);--px:"Press Start 2P",Impact,sans-serif}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#171029;color:var(--ink);font:600 15px "Trebuchet MS",system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
+canvas{position:fixed;inset:0;cursor:none;touch-action:none}
+body:not(.in) .hud,body:not(.in) #dashbtn{display:none!important}
+.hud{position:fixed;pointer-events:none}
+.pill{background:var(--panel);padding:7px 14px;border-radius:12px}
+#score{top:12px;left:50%;transform:translateX(-50%);display:flex;gap:16px;align-items:center;font:400 22px var(--px)}
+#score small{font:600 13px "Trebuchet MS",sans-serif;opacity:.8;text-align:center;line-height:1.3}
+#me{top:14px;left:14px}
+#help{top:10px;left:14px;opacity:.75;font-size:13px}
+#feed{top:14px;right:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+#board{bottom:14px;left:14px;font-size:14px;line-height:1.6}
+#dash{bottom:22px;left:50%;transform:translateX(-50%);width:200px;height:10px;border-radius:9px;background:var(--panel);overflow:hidden}
+#dash i{display:block;height:100%;background:var(--ink)}
+#mini{bottom:14px;right:14px;width:220px;height:137px;border-radius:12px;border:2px solid rgba(143,123,224,.7);background:var(--panel)}
+#msg{inset:0;display:grid;place-items:center;text-align:center;font:400 28px/1.5 var(--px);text-shadow:0 5px 0 #0008}
+#dashbtn{display:none;position:fixed;right:calc(22px + env(safe-area-inset-right));bottom:34%;width:80px;height:80px;border-radius:50%;background:var(--panel);border:3px solid var(--ink);place-items:center;font:400 12px var(--px);touch-action:none;transition:opacity .1s}
+#dashbtn:active{background:rgba(255,245,236,.35)}
+.ov{position:fixed;inset:0;z-index:5;display:flex;background:rgba(23,16,41,.9);overflow:auto;padding:10px;cursor:default}
+.ov.hide{display:none} .ov .card{margin:auto}
+.card.wide{width:min(96vw,780px);animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+.teams2{display:flex;gap:10px;flex-wrap:wrap}.tm{flex:1 1 280px;border:2px solid;border-radius:12px;padding:8px 10px;background:rgba(0,0,0,.2)}
+.th{font-size:14px;margin-bottom:2px}.big2{font-size:20px}.sub{opacity:.75;font-size:13px;margin:4px 0}.mine{margin:8px 0 10px;font-size:14px}
+.bar{height:8px;border-radius:6px;background:rgba(255,255,255,.15);overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;width:100%;background:#8f7be0;transition:width 1s linear}
+.conf{position:fixed;inset:0;pointer-events:none;overflow:hidden}.conf i{position:absolute;top:-14px;width:8px;height:13px;animation:fall linear infinite}
+@keyframes fall{to{transform:translateY(108vh) rotate(720deg)}}
+.card{background:#241a45;border:3px solid #8f7be0;border-radius:16px;padding:22px;width:min(94vw,440px);text-align:center;box-shadow:0 8px 0 #0006}
+h1,h2{font:400 26px/1.3 var(--px);margin:0 0 14px}
+h1 span{color:var(--c1)} h1{color:var(--c0)}
+input{width:100%;font:inherit;font-size:16px;padding:11px;border-radius:10px;border:2px solid #5a4891;background:#150e29;color:var(--ink);text-align:center;margin-bottom:12px;user-select:text;-webkit-user-select:text}
+.row{display:flex;gap:10px;margin-bottom:10px}
+.btn{flex:1;font:inherit;font-size:15px;padding:12px 8px;border-radius:10px;border:3px solid #8f7be0;background:#150e29;color:var(--ink);cursor:pointer;touch-action:manipulation}
+.btn:active{transform:translateY(2px)} .btn.full{opacity:.45}
+#t0{border-color:var(--c0)} #t1{border-color:var(--c1)} .big{width:100%;background:#5a4891}
+#err{min-height:20px;margin:6px 0;color:#ff8a9a;font-size:14px} #online,.how{font-size:12px;opacity:.7;margin:6px 0 0}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px} td,th{padding:4px 6px;text-align:right} td:first-child,th:first-child{text-align:left}
+tr.me{background:rgba(255,245,236,.14)} th{opacity:.6;font-weight:600;font-size:12px}
+#cd{margin:8px 0 12px;opacity:.85}
+@media (pointer:coarse){
+  #board,#help{display:none}
+  #me{font-size:12px;padding:5px 10px;top:calc(8px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left))}
+  #score{font-size:14px;top:calc(6px + env(safe-area-inset-top));gap:12px;padding:3px 12px}
+  #score small{font-size:11px}
+  #feed{font-size:12px;top:calc(8px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right))}
+  #feed .pill{padding:4px 9px}
+  #mini{width:150px;height:94px;bottom:auto;right:auto;top:calc(46px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left))}
+  #dash{width:120px;bottom:12px}
+  #msg{font-size:15px}
+  #dashbtn{display:grid}
+}
+@media (max-height:520px){.card{padding:12px}h1,h2{font-size:17px;margin-bottom:8px}input{padding:7px;margin-bottom:8px}.btn{padding:8px}table{font-size:12px;margin:4px 0}.how{display:none}}
+#rotate{display:none;position:fixed;inset:0;z-index:9;background:#171029;place-items:center;text-align:center;padding:30px;font:400 16px/1.6 var(--px)}
+@media (pointer:coarse) and (orientation:portrait){#rotate{display:grid}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud pill" id="me">connecting…</div>
+<div class="hud pill" id="score"><b style="color:var(--c0)" id="s0">0</b><small id="tm">first to 15</small><b style="color:var(--c1)" id="s1">0</b></div>
+<div class="hud" id="feed"></div>
+<div class="hud pill" id="board"></div>
+<div class="hud" id="dash"><i></i></div>
+<canvas class="hud" id="mini" width="220" height="137"></canvas>
+<div class="hud pill" id="help">WASD or arrow button move · mouse aim + hold click to shoot · Space dash</div>
+<div class="hud" id="msg"></div>
+<div id="dashbtn">DASH</div>
+
+<div class="ov" id="menu"><div class="card">
+  <h1>CLASH<span>ZONE</span></h1>
+  <input id="name" maxlength="12" placeholder="Your name" autocomplete="off">
+  <div class="row"><button class="btn" id="t0">Coral</button><button class="btn" id="t1">Teal</button></div>
+  <button class="btn big" id="auto">Quick play (auto team)</button>
+  <div id="err"></div>
+  <div id="online">connecting…</div>
+  <p class="how">First team to the kill target wins before the timer runs out. Empty slots are filled by bots.</p>
+</div></div>
+<div class="ov hide" id="over"></div>
+<div id="rotate">ROTATE YOUR PHONE<br>to landscape</div>
+
+<script>
+const byId = id => document.getElementById(id);
+const escapeHtml = text => String(text).replace(/[&<>"']/g, character => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[character]));
+const gameCanvas = byId("c"), gameContext = gameCanvas.getContext("2d"), socket = io();
+const minimapCanvas = byId("mini"), minimapContext = minimapCanvas.getContext("2d");
+const isTouchDevice = matchMedia("(pointer:coarse)").matches || "ontouchstart" in window;
+const TOUCH_STICK_RADIUS = 60;
+
+let teamColors = ["#ff6b57", "#35d6e8"], teamNames = ["Coral", "Teal"], sprites = null, dashCooldownSeconds = 1.6, killsToWin = 15;
+let localPlayer = null, arenaWidth = 1600, arenaHeight = 1000, walls = [], latestState = null;
+let visualPlayers = {}, previousHealth = {}, particles = [], screenShake = 0, previousWinner = -1, resultScreenTotalSeconds = 10;
+let pressedKeys = {}, mousePosition = {x: 0, y: 0}, isMouseFiring = false, camera = {x: 0, y: 0}, zoomLevel = 1;
+let isTouchControlActive = false, lastTouchAimAngle = 0, lastFrameTime = performance.now();
+const touchSticks = {move: null, aim: null};
+
+function resizeCanvasToWindow() {
+  gameCanvas.width = innerWidth;
+  gameCanvas.height = innerHeight;
+  gameContext.imageSmoothingEnabled = false;
+  zoomLevel = Math.min(1, Math.max(.5, Math.min(gameCanvas.width / 1000, gameCanvas.height / 620)));
+}
+addEventListener("resize", resizeCanvasToWindow);
+resizeCanvasToWindow();
+
+function createCanvas(width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
+function paintPixelRows(context, rows, palette, offsetX = 0, offsetY = 0) {
+  rows.forEach((row, rowIndex) => [...row].forEach((letter, columnIndex) => {
+    const color = palette[letter];
+    if (color) {
+      context.fillStyle = color;
+      context.fillRect(offsetX + columnIndex, offsetY + rowIndex, 1, 1);
+    }
+  }));
+}
+
+function buildSpritesFromGraphicsJson(graphics) {
+  teamColors = graphics.teams.map(team => team.M);
+  const soldier = graphics.soldier;
+  const renderSpriteToCanvas = (sprite, extraPalette = {}) => {
+    const canvas = createCanvas(sprite.rows[0].length, sprite.rows.length);
+    paintPixelRows(canvas.getContext("2d"), sprite.rows, {...sprite.palette, ...extraPalette});
+    return canvas;
+  };
+  sprites = {
+    frames: soldier.boot_x.length,
+    crosshair: renderSpriteToCanvas(graphics.crosshair),
+    soldierSheets: graphics.teams.map(teamColorSet => {
+      const palette = {...soldier.palette, ...teamColorSet};
+      const sheet = createCanvas(24 * soldier.boot_x.length, 16), sheetContext = sheet.getContext("2d");
+      soldier.boot_x.forEach((bootXOffsets, frameIndex) => {
+        soldier.boot_y.forEach((bootY, bootIndex) => paintPixelRows(sheetContext, soldier.boot, palette, frameIndex * 24 + bootXOffsets[bootIndex], bootY));
+        paintPixelRows(sheetContext, soldier.rows, palette, frameIndex * 24, 0);
+      });
+      return sheet;
+    }),
+    bullets: graphics.teams.map(teamColorSet => renderSpriteToCanvas(graphics.bullet, teamColorSet)),
+    floorPattern: gameContext.createPattern(renderSpriteToCanvas(graphics.floor), "repeat"),
+    wallPattern: gameContext.createPattern(renderSpriteToCanvas(graphics.wall), "repeat")
+  };
+  document.documentElement.style.setProperty("--c0", teamColors[0]);
+  document.documentElement.style.setProperty("--c1", teamColors[1]);
+}
+fetch("/graphics.json").then(response => response.json()).then(buildSpritesFromGraphicsJson)
+  .catch(() => byId("err").textContent = "Could not load graphics.json");
+
+function spawnParticleBurst(x, y, color, count) {
+  if (isTouchDevice) count = Math.ceil(count / 2);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * 6.28, speed = 60 + Math.random() * 240;
+    particles.push({x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .5 + Math.random() * .4, color});
+  }
+}
+
+try { byId("name").value = localStorage.getItem("cz_name") || ""; } catch (_) {}
+
+function requestJoinMatch(team) {
+  byId("err").textContent = "";
+  try { localStorage.setItem("cz_name", byId("name").value); } catch (_) {}
+  socket.emit("join", {name: byId("name").value, team});
+}
+byId("t0").onclick = () => requestJoinMatch(0);
+byId("t1").onclick = () => requestJoinMatch(1);
+byId("auto").onclick = () => requestJoinMatch(-1);
+byId("name").addEventListener("keydown", event => { if (event.key === "Enter") requestJoinMatch(-1); });
+
+function showMainMenu(message) {
+  localPlayer = null;
+  latestState = null;
+  previousWinner = -1;
+  document.body.classList.remove("in");
+  byId("menu").classList.remove("hide");
+  byId("over").classList.add("hide");
+  byId("err").textContent = message || "";
+}
+
+socket.on("lobby", lobby => {
+  teamNames = lobby.names;
+  byId("name").maxLength = lobby.max_name;
+  for (const team of [0, 1]) {
+    const button = byId("t" + team);
+    button.textContent = `${teamNames[team]}  ${lobby.teams[team]}/${lobby.max_team}`;
+    button.classList.toggle("full", lobby.teams[team] >= lobby.max_team);
+  }
+  byId("online").textContent = `${lobby.teams[0] + lobby.teams[1]}/${lobby.max} players online`;
+});
+socket.on("denied", denial => byId("err").textContent = denial.reason);
+socket.on("disconnect", () => showMainMenu("Connection lost - reconnecting…"));
+socket.on("connect", () => { if (!localPlayer) byId("err").textContent = ""; });
+socket.on("hello", hello => {
+  localPlayer = hello;
+  arenaWidth = hello.w;
+  arenaHeight = hello.h;
+  walls = hello.walls;
+  teamNames = hello.names;
+  killsToWin = hello.win;
+  dashCooldownSeconds = hello.dash_cd;
+  previousWinner = -1;
+  document.body.classList.add("in");
+  byId("menu").classList.add("hide");
+  byId("over").classList.add("hide");
+  byId("me").innerHTML = `You are <span style="color:${teamColors[hello.team]}">${escapeHtml(hello.id)}</span> · ${escapeHtml(teamNames[hello.team])} team`;
+});
+
+function showMatchResultScreen(state) {
+  const winnerTeam = state.over, didWin = winnerTeam === localPlayer.team, isDraw = winnerTeam === 2;
+  resultScreenTotalSeconds = Math.max(1, state.nx);
+  const outcome = isDraw ? ["DRAW", "#fff5ec"] : didWin ? ["VICTORY!", "#7dffa0"] : ["DEFEAT", "#ff5a6e"];
+  const playersByKills = [...state.p].sort((a, b) => b.k - a.k || a.d - b.d);
+  const mvp = playersByKills[0];
+  const myStats = state.p.find(p => p.id === localPlayer.id) || playersByKills[0];
+  const accuracyText = p => p.sh ? Math.round(p.ht / p.sh * 100) + "%" : "-";
+  const killDeathRatio = p => (p.k / Math.max(1, p.d)).toFixed(1);
+  const buildTeamTableHtml = team => `<div class="tm" style="border-color:${teamColors[team]}"><div class="th" style="color:${teamColors[team]}">${escapeHtml(teamNames[team])} · ${state.sc[team]} kills${winnerTeam === team ? " 👑" : ""}</div>
+    <table><tr><th>Player</th><th>K</th><th>D</th><th>K/D</th><th>Acc</th></tr>${playersByKills.filter(p => p.t === team).map(p =>
+      `<tr class="${p.id === localPlayer.id ? "me" : ""}"><td>${p === mvp ? "★ " : ""}${escapeHtml(p.id)}${p.bot ? " 🤖" : ""}</td><td>${p.k}</td><td>${p.d}</td><td>${killDeathRatio(p)}</td><td>${accuracyText(p)}</td></tr>`).join("")}</table></div>`;
+  const confettiColors = ["#ff6b57", "#35d6e8", "#ffd45e", "#7dffa0", "#fff5ec"];
+  const confettiHtml = didWin ? `<div class="conf">${Array.from({length: 44}, () => `<i style="left:${Math.random() * 100}%;background:${confettiColors[Math.random() * 5 | 0]};animation-duration:${2.5 + Math.random() * 2.5}s;animation-delay:${Math.random() * 1.5}s"></i>`).join("")}</div>` : "";
+  const winnerName = escapeHtml(teamNames[winnerTeam]);
+  const reasonText = isDraw ? "Time is up - it's a tie" : state.sc[winnerTeam] >= killsToWin ? `${winnerName} reached the kill target` : `Time is up - ${winnerName} had more kills`;
+  byId("over").innerHTML = `${confettiHtml}<div class="card wide"><h2 style="color:${outcome[1]}">${outcome[0]}</h2>
+    <div class="big2">${escapeHtml(teamNames[0])} <b style="color:${teamColors[0]}">${state.sc[0]}</b> – <b style="color:${teamColors[1]}">${state.sc[1]}</b> ${escapeHtml(teamNames[1])}</div>
+    <div class="sub">${reasonText}</div>
+    <div class="mine">Your match: <b>${myStats.k}</b> kills · <b>${myStats.d}</b> deaths · <b>${accuracyText(myStats)}</b> accuracy${myStats === mvp ? " · <span style='color:#ffd45e'>★ MVP!</span>" : ""}</div>
+    <div class="teams2">${buildTeamTableHtml(0)}${buildTeamTableHtml(1)}</div>
+    <div class="sub">★ MVP: ${escapeHtml(mvp.id)} (${mvp.k} kills)</div>
+    <div class="bar"><i id="cdb"></i></div><div id="cd"></div><button class="btn big" id="leave">Leave match</button></div>`;
+  byId("leave").onclick = () => { socket.emit("leave"); showMainMenu(); };
+  byId("over").classList.remove("hide");
+}
+
+socket.on("feed", entry => {
+  const feedLine = document.createElement("div");
+  feedLine.className = "pill";
+  feedLine.innerHTML = `<span style="color:${teamColors[entry.kt]}">${escapeHtml(entry.k)}</span> eliminated <span style="color:${teamColors[entry.vt]}">${escapeHtml(entry.v)}</span>`;
+  byId("feed").prepend(feedLine);
+  setTimeout(() => feedLine.remove(), 4000);
+  while (byId("feed").children.length > 5) byId("feed").lastChild.remove();
+});
+
+socket.on("s", state => {
+  if (!localPlayer) return;
+  latestState = state;
+  for (const player of state.p) {
+    const visual = visualPlayers[player.id] || (visualPlayers[player.id] = {x: player.x, y: player.y, dead: player.dead});
+    visual.isMoving = Math.hypot(player.x - (visual.lastServerX ?? player.x), player.y - (visual.lastServerY ?? player.y)) > 1.5;
+    visual.lastServerX = player.x;
+    visual.lastServerY = player.y;
+    if (previousHealth[player.id] !== undefined && player.hp < previousHealth[player.id]) {
+      spawnParticleBurst(player.x, player.y, teamColors[player.t], 6);
+      if (player.id === localPlayer.id) screenShake = 12;
+    }
+    if (player.dead && previousHealth[player.id] > 0) spawnParticleBurst(player.x, player.y, teamColors[player.t], 36);
+    if (player.cd > dashCooldownSeconds - .15) spawnParticleBurst(player.x, player.y, "#fff5ec", 1);
+    if (visual.dead && !player.dead) { visual.x = player.x; visual.y = player.y; }
+    visual.dead = player.dead;
+    previousHealth[player.id] = player.hp;
+  }
+  byId("s0").textContent = state.sc[0];
+  byId("s1").textContent = state.sc[1];
+  const myPlayer = state.p.find(p => p.id === localPlayer.id);
+  if (myPlayer) {
+    byId("dash").firstElementChild.style.width = (100 - myPlayer.cd / dashCooldownSeconds * 100) + "%";
+    byId("dashbtn").style.opacity = myPlayer.cd > 0 ? .45 : 1;
+  }
+  byId("board").innerHTML = [...state.p].sort((a, b) => b.k - a.k).slice(0, 6).map(p =>
+    `<div><span style="color:${teamColors[p.t]}">${escapeHtml(p.id)}</span> &nbsp;${p.k} kills / ${p.d} deaths</div>`).join("");
+  const timerLabel = byId("tm");
+  timerLabel.textContent = `first to ${killsToWin} · ${Math.floor(state.t / 60)}:${String(state.t % 60).padStart(2, "0")}`;
+  timerLabel.style.color = state.over < 0 && state.t <= 30 ? "#ff8a9a" : "";
+  if (state.over >= 0 && previousWinner < 0) showMatchResultScreen(state);
+  if (state.over < 0 && previousWinner >= 0) byId("over").classList.add("hide");
+  previousWinner = state.over;
+  if (state.over >= 0 && byId("cd")) {
+    byId("cd").textContent = `Next match in ${state.nx}s`;
+    byId("cdb").style.width = (state.nx / resultScreenTotalSeconds * 100) + "%";
+  }
+  byId("msg").innerHTML = state.over < 0 && myPlayer && myPlayer.dead ? `Respawning in ${Math.ceil(myPlayer.rs)}` : "";
+});
+
+addEventListener("keydown", event => {
+  if (!localPlayer) return;
+  pressedKeys[event.code] = 1;
+  if (event.code === "Space") { event.preventDefault(); socket.emit("dash"); }
+});
+addEventListener("keyup", event => pressedKeys[event.code] = 0);
+addEventListener("blur", () => { pressedKeys = {}; isMouseFiring = false; touchSticks.move = touchSticks.aim = null; });
+addEventListener("contextmenu", event => event.preventDefault());
+
+gameCanvas.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse") {
+    isTouchControlActive = false;
+    if (event.button === 0) isMouseFiring = true;
+    return;
+  }
+  event.preventDefault();
+  isTouchControlActive = true;
+  try { gameCanvas.setPointerCapture(event.pointerId); } catch (_) {}
+  const side = event.clientX < innerWidth / 2 ? "move" : "aim";
+  if (!touchSticks[side]) touchSticks[side] = {id: event.pointerId, originX: event.clientX, originY: event.clientY, x: event.clientX, y: event.clientY};
+});
+
+addEventListener("pointermove", event => {
+  if (event.pointerType === "mouse") {
+    mousePosition.x = event.clientX;
+    mousePosition.y = event.clientY;
+    isTouchControlActive = false;
+    return;
+  }
+  for (const side in touchSticks) {
+    if (touchSticks[side] && touchSticks[side].id === event.pointerId) {
+      touchSticks[side].x = event.clientX;
+      touchSticks[side].y = event.clientY;
+    }
+  }
+});
+
+function handlePointerRelease(event) {
+  if (event.pointerType === "mouse") {
+    if (event.button === 0 || event.type === "pointercancel") isMouseFiring = false;
+    return;
+  }
+  for (const side in touchSticks) {
+    if (touchSticks[side] && touchSticks[side].id === event.pointerId) touchSticks[side] = null;
+  }
+}
+addEventListener("pointerup", handlePointerRelease);
+addEventListener("pointercancel", handlePointerRelease);
+byId("dashbtn").addEventListener("pointerdown", event => { event.preventDefault(); socket.emit("dash"); });
+for (const eventName of ["gesturestart", "dblclick"]) document.addEventListener(eventName, event => { if (localPlayer) event.preventDefault(); });
+
+function getStickVector(stick) {
+  if (!stick) return null;
+  let offsetX = stick.x - stick.originX, offsetY = stick.y - stick.originY;
+  const length = Math.hypot(offsetX, offsetY);
+  if (length > TOUCH_STICK_RADIUS) {
+    offsetX = offsetX / length * TOUCH_STICK_RADIUS;
+    offsetY = offsetY / length * TOUCH_STICK_RADIUS;
+  }
+  return {normalizedX: offsetX / TOUCH_STICK_RADIUS, normalizedY: offsetY / TOUCH_STICK_RADIUS,
+          strength: Math.min(length, TOUCH_STICK_RADIUS) / TOUCH_STICK_RADIUS, offsetX, offsetY};
+}
+
+setInterval(function sendInputToServer() {
+  if (!localPlayer || !visualPlayers[localPlayer.id]) return;
+  const myVisual = visualPlayers[localPlayer.id];
+  const moveStick = getStickVector(touchSticks.move), aimStick = getStickVector(touchSticks.aim), STICK_THRESHOLD = .35;
+  let aimAngle;
+  if (isTouchControlActive) {
+    if (aimStick && aimStick.strength > .12) lastTouchAimAngle = Math.atan2(aimStick.normalizedY, aimStick.normalizedX);
+    aimAngle = lastTouchAimAngle;
+  } else {
+    aimAngle = Math.atan2(mousePosition.y / zoomLevel + camera.y - myVisual.y, mousePosition.x / zoomLevel + camera.x - myVisual.x);
+  }
+  socket.emit("input", {
+    k: {l: pressedKeys.KeyA || pressedKeys.ArrowLeft || (moveStick && moveStick.normalizedX < -STICK_THRESHOLD ? 1 : 0),
+        r: pressedKeys.KeyD || pressedKeys.ArrowRight || (moveStick && moveStick.normalizedX > STICK_THRESHOLD ? 1 : 0),
+        u: pressedKeys.KeyW || pressedKeys.ArrowUp || (moveStick && moveStick.normalizedY < -STICK_THRESHOLD ? 1 : 0),
+        d: pressedKeys.KeyS || pressedKeys.ArrowDown || (moveStick && moveStick.normalizedY > STICK_THRESHOLD ? 1 : 0)},
+    a: aimAngle,
+    f: isTouchControlActive ? !!(aimStick && aimStick.strength > .15) : isMouseFiring
+  });
+}, 33);
+
+function drawMinimap() {
+  const width = minimapCanvas.width, height = minimapCanvas.height, scale = width / arenaWidth;
+  minimapContext.clearRect(0, 0, width, height);
+  minimapContext.fillStyle = "rgba(255,107,87,.14)";
+  minimapContext.fillRect(0, 0, 260 * scale, height);
+  minimapContext.fillStyle = "rgba(53,214,232,.14)";
+  minimapContext.fillRect(width - 260 * scale, 0, 260 * scale, height);
+  minimapContext.fillStyle = "#8f7be0";
+  for (const [x, y, wallWidth, wallHeight] of walls) {
+    minimapContext.fillRect(x * scale, y * scale, Math.max(wallWidth * scale, 2), Math.max(wallHeight * scale, 2));
+  }
+  minimapContext.strokeStyle = "rgba(255,245,236,.55)";
+  minimapContext.lineWidth = 1;
+  minimapContext.strokeRect(camera.x * scale, camera.y * scale, gameCanvas.width / zoomLevel * scale, gameCanvas.height / zoomLevel * scale);
+  for (const player of latestState.p) {
+    if (player.dead) continue;
+    const visual = visualPlayers[player.id], isLocalPlayer = player.id === localPlayer.id;
+    minimapContext.fillStyle = teamColors[player.t];
+    minimapContext.beginPath();
+    minimapContext.arc(visual.x * scale, visual.y * scale, isLocalPlayer ? 4.5 : 3.2, 0, 7);
+    minimapContext.fill();
+    if (isLocalPlayer) {
+      minimapContext.strokeStyle = "#fff";
+      minimapContext.lineWidth = 2;
+      minimapContext.stroke();
+      minimapContext.beginPath();
+      minimapContext.moveTo(visual.x * scale, visual.y * scale);
+      minimapContext.lineTo(visual.x * scale + Math.cos(player.a) * 12, visual.y * scale + Math.sin(player.a) * 12);
+      minimapContext.stroke();
+    }
+  }
+}
+
+function drawTouchSticks() {
+  for (const side of ["move", "aim"]) {
+    const stick = touchSticks[side];
+    if (!stick) continue;
+    const vector = getStickVector(stick);
+    gameContext.globalAlpha = .35;
+    gameContext.fillStyle = "#fff5ec";
+    gameContext.beginPath();
+    gameContext.arc(stick.originX, stick.originY, TOUCH_STICK_RADIUS, 0, 7);
+    gameContext.fill();
+    gameContext.globalAlpha = .75;
+    gameContext.fillStyle = side === "aim" ? "#ff6b57" : "#fff5ec";
+    gameContext.beginPath();
+    gameContext.arc(stick.originX + vector.offsetX, stick.originY + vector.offsetY, 26, 0, 7);
+    gameContext.fill();
+    gameContext.globalAlpha = 1;
+  }
+  if (!touchSticks.move && !touchSticks.aim) {
+    gameContext.globalAlpha = .18;
+    gameContext.fillStyle = "#fff5ec";
+    gameContext.font = "700 14px Trebuchet MS";
+    gameContext.textAlign = "center";
+    gameContext.fillText("MOVE", gameCanvas.width * .2, gameCanvas.height - 60);
+    gameContext.fillText("AIM + FIRE", gameCanvas.width * .72, gameCanvas.height - 60);
+    gameContext.globalAlpha = 1;
+  }
+}
+
+function renderFrame(timestamp) {
+  requestAnimationFrame(renderFrame);
+  const secondsElapsed = Math.min((timestamp - lastFrameTime) / 1000, .05);
+  lastFrameTime = timestamp;
+  gameContext.fillStyle = "#171029";
+  gameContext.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
+  if (!sprites || !latestState || !localPlayer || !visualPlayers[localPlayer.id]) return;
+
+  for (const player of latestState.p) {
+    const visual = visualPlayers[player.id];
+    visual.x += (player.x - visual.x) * .4;
+    visual.y += (player.y - visual.y) * .4;
+  }
+  const myVisual = visualPlayers[localPlayer.id];
+  screenShake *= .88;
+  camera.x = myVisual.x - gameCanvas.width / zoomLevel / 2 + (Math.random() - .5) * screenShake;
+  camera.y = myVisual.y - gameCanvas.height / zoomLevel / 2 + (Math.random() - .5) * screenShake;
+
+  gameContext.save();
+  gameContext.scale(zoomLevel, zoomLevel);
+  gameContext.translate(-camera.x, -camera.y);
+
+  gameContext.save();
+  gameContext.scale(4, 4);
+  gameContext.fillStyle = sprites.floorPattern;
+  gameContext.fillRect(0, 0, arenaWidth / 4, arenaHeight / 4);
+  gameContext.restore();
+
+  gameContext.fillStyle = "rgba(255,107,87,.10)";
+  gameContext.fillRect(0, 0, 260, arenaHeight);
+  gameContext.fillStyle = "rgba(53,214,232,.10)";
+  gameContext.fillRect(arenaWidth - 260, 0, 260, arenaHeight);
+  gameContext.strokeStyle = "#8f7be0";
+  gameContext.lineWidth = 6;
+  gameContext.strokeRect(0, 0, arenaWidth, arenaHeight);
+
+  for (const [x, y, wallWidth, wallHeight] of walls) {
+    gameContext.fillStyle = "rgba(10,5,25,.55)";
+    gameContext.fillRect(x + 6, y + 8, wallWidth, wallHeight);
+    gameContext.save();
+    gameContext.translate(x, y);
+    gameContext.scale(3, 3);
+    gameContext.fillStyle = sprites.wallPattern;
+    gameContext.fillRect(0, 0, wallWidth / 3, wallHeight / 3);
+    gameContext.restore();
+  }
+
+  for (const [x, y, team, angle] of latestState.b) {
+    gameContext.save();
+    gameContext.translate(x, y);
+    gameContext.rotate(angle);
+    gameContext.drawImage(sprites.bullets[team], -20, -4.5, 24, 9);
+    gameContext.restore();
+  }
+
+  for (const player of latestState.p) {
+    if (player.dead) continue;
+    const visual = visualPlayers[player.id];
+    if (visual.isMoving) visual.walkAnimation = (visual.walkAnimation || 0) + secondsElapsed * 11;
+    const frameIndex = visual.isMoving ? Math.floor(visual.walkAnimation) % sprites.frames : 1;
+    gameContext.save();
+    gameContext.translate(visual.x, visual.y);
+    gameContext.fillStyle = "rgba(0,0,0,.3)";
+    gameContext.beginPath();
+    gameContext.ellipse(4, 8, 20, 16, 0, 0, 7);
+    gameContext.fill();
+    if (player.id === localPlayer.id) {
+      gameContext.strokeStyle = "rgba(255,255,255,.7)";
+      gameContext.lineWidth = 3;
+      gameContext.beginPath();
+      gameContext.arc(0, 0, 26, 0, 7);
+      gameContext.stroke();
+    }
+    if (player.inv) gameContext.globalAlpha = Math.floor(timestamp / 100) % 2 ? .35 : .85;
+    gameContext.rotate(player.a);
+    gameContext.drawImage(sprites.soldierSheets[player.t], frameIndex * 24, 0, 24, 16, -24, -24, 72, 48);
+    gameContext.restore();
+    gameContext.fillStyle = "rgba(0,0,0,.5)";
+    gameContext.fillRect(visual.x - 22, visual.y + 26, 44, 6);
+    gameContext.fillStyle = teamColors[player.t];
+    gameContext.fillRect(visual.x - 22, visual.y + 26, 44 * Math.max(player.hp, 0) / 100, 6);
+    gameContext.fillStyle = "#fff5ec";
+    gameContext.font = "600 12px Trebuchet MS";
+    gameContext.textAlign = "center";
+    gameContext.fillText(player.id, visual.x, visual.y - 28);
+  }
+
+  for (const particle of particles) {
+    particle.x += particle.vx * secondsElapsed;
+    particle.y += particle.vy * secondsElapsed;
+    particle.life -= secondsElapsed;
+    gameContext.globalAlpha = Math.max(particle.life * 2, 0);
+    gameContext.fillStyle = particle.color;
+    gameContext.fillRect(particle.x - 3, particle.y - 3, 6, 6);
+  }
+  gameContext.globalAlpha = 1;
+  particles = particles.filter(particle => particle.life > 0);
+  gameContext.restore();
+
+  drawMinimap();
+  if (isTouchControlActive || isTouchDevice) drawTouchSticks();
+  if (!isTouchControlActive && !isTouchDevice) gameContext.drawImage(sprites.crosshair, mousePosition.x - 16, mousePosition.y - 16, 32, 32);
+}
+requestAnimationFrame(renderFrame);
+</script>
+</body>
+</html>

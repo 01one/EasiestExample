@@ -1,0 +1,159 @@
+{
+  "teams": [
+    {
+      "M": "#ff6b57",
+      "D": "#b83c2c",
+      "L": "#ffa08f"
+    },
+    {
+      "M": "#35d6e8",
+      "D": "#1a8ea0",
+      "L": "#9af3ff"
+    }
+  ],
+  "soldier": {
+    "palette": {
+      "o": "#1b1030",
+      "s": "#f2c29b",
+      "w": "#fff5ec",
+      "g": "#8a8fa3",
+      "G": "#454a60",
+      "b": "#3d3260"
+    },
+    "boot": [
+      "oooo",
+      "obbo",
+      "oooo"
+    ],
+    "boot_y": [
+      2,
+      11
+    ],
+    "boot_x": [
+      [
+        2,
+        12
+      ],
+      [
+        7,
+        7
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        7,
+        7
+      ]
+    ],
+    "rows": [
+      "........................",
+      "........................",
+      "......ooooo.............",
+      ".....oLLLLLo............",
+      ".....oMMDMMo............",
+      "...ooooooooooooo........",
+      "...oDoLLLLoMMMMss.......",
+      "...oDoLLLwwoooossoooooo.",
+      "...oDoMMMwoooggggggGGGo.",
+      "...oDoLLLwwooossooooooo.",
+      "...oooLLLLoMMMsso.......",
+      ".....oooooooooo.........",
+      ".....oDDDDDo............",
+      "......ooooo.............",
+      "........................",
+      "........................"
+    ]
+  },
+  "bullet": {
+    "palette": {
+      "w": "#fff5ec"
+    },
+    "rows": [
+      "...MMMM.",
+      "DDDwwwww",
+      "...MMMM."
+    ]
+  },
+  "floor": {
+    "palette": {
+      "1": "#2d2250",
+      "2": "#33275a",
+      "3": "#281d48",
+      "4": "#362b5f"
+    },
+    "rows": [
+      "4444444444444444",
+      "4111211111311111",
+      "4131111211111121",
+      "4111111111311111",
+      "4211311111111211",
+      "4111111211111111",
+      "4113111111121131",
+      "4111121111111111",
+      "4311111131111211",
+      "4111211111111111",
+      "4111111211311111",
+      "4121111111111211",
+      "4111311111121111",
+      "4111111131111111",
+      "4211111111211311",
+      "4111311111111111"
+    ]
+  },
+  "wall": {
+    "palette": {
+      "a": "#3b2d66",
+      "b": "#5a4891",
+      "c": "#9b88ee",
+      "d": "#7b68c4",
+      "e": "#46367a",
+      "f": "#6d59b3",
+      "r": "#2a1f4a",
+      "R": "#c4b8ff"
+    },
+    "rows": [
+      "aaaaaaaaaaaaaaaa",
+      "adccccccccccccea",
+      "adRrbbbbbbbbRrea",
+      "adrrbbbbbbbbrrea",
+      "adbbfbbbbbbfbbea",
+      "adbbbfbbbbfbbbea",
+      "adbbbbfbbfbbbbea",
+      "adbbbbbffbbbbbea",
+      "adbbbbbffbbbbbea",
+      "adbbbbfbbfbbbbea",
+      "adbbbfbbbbfbbbea",
+      "adbbfbbbbbbfbbea",
+      "adRrbbbbbbbbRrea",
+      "adrrbbbbbbbbrrea",
+      "aeeeeeeeeeeeeeea",
+      "aaaaaaaaaaaaaaaa"
+    ]
+  },
+  "crosshair": {
+    "palette": {
+      "w": "#fff5ec",
+      "r": "#ff6b57"
+    },
+    "rows": [
+      ".......ww.......",
+      ".......ww.......",
+      ".......ww.......",
+      ".....wwwwww.....",
+      "....w......w....",
+      "...w........w...",
+      "...w........w...",
+      "wwww...rr...wwww",
+      "wwww...rr...wwww",
+      "...w........w...",
+      "...w........w...",
+      "....w......w....",
+      ".....wwwwww.....",
+      ".......ww.......",
+      ".......ww.......",
+      ".......ww......."
+    ]
+  }
+}
